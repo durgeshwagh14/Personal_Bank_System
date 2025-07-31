@@ -2,21 +2,9 @@ import streamlit as st
 import random
 import string
 import time
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import openai
-from datetime import datetime
 
-# --- 🔐 CONFIGURATION (Update these) ---
-OPENAI_API_KEY = "sk-proj-..."           # ← Your OpenAI API key
-SENDER_EMAIL = "you@gmail.com"           # ← Your Gmail
-SENDER_PASSWORD = "your-app-password"    # ← Gmail App Password
-
-openai.api_key = OPENAI_API_KEY
-
-# Set page config
-st.set_page_config(page_title="🏦 MyBank Pro", layout="centered")
+# Set page configuration
+st.set_page_config(page_title="🏦 MyBank - With Smart Assistant", layout="centered")
 
 # Initialize session state
 initial_state = {
@@ -24,261 +12,244 @@ initial_state = {
     'balance': 0,
     'name': '',
     'mobile': '',
-    'email': '',
     'otp': '',
     'setup_complete': False,
-    'chat_history': [],
-    'transaction_history': [],
-    'email_sent': False,
-    'dark_mode': False,  # New: dark mode toggle
+    'chat_history': [],  # To store chat messages
 }
 
 for key, value in initial_state.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# Function: Generate OTP
+# Function to generate a 6-character OTP
 def generate_otp():
-    return ''.join(random.choices(string.digits, k=6))
+    characters = string.digits + string.ascii_uppercase + string.ascii_lowercase
+    return ''.join(random.choices(characters, k=6))
 
-# Function: Send OTP via Email
-def send_otp_email(email, otp):
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = email
-        msg['Subject'] = "🔐 Your MyBank OTP Code"
+# Smart Chatbot Response Function
+def get_bot_response(user_input):
+    user_input = user_input.lower().strip()
+    balance = st.session_state.balance
+    name = st.session_state.name or "User"
 
-        body = f"""
-        Hello {st.session_state.name},
-
-        Your OTP is: **{otp}**
-
-        Thank you,
-        MyBank Team
-        """
-        msg.attach(MIMEText(body, 'plain'))
-
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        text = msg.as_string()
-        server.sendmail(SENDER_EMAIL, email, text)
-        server.quit()
-        return True
-    except Exception as e:
-        st.error(f"❌ Failed to send email: {str(e)}")
-        return False
-
-# Function: Get AI Response from ChatGPT
-def get_ai_response(user_input):
-    try:
-        context = f"""
-        You are MyBank Assistant. User: {st.session_state.name}, Balance: ₹{st.session_state.balance:,}
-        Be helpful, short, and clear.
-        """
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": context},
-                *[{"role": m["role"], "content": m["text"]} for m in st.session_state.chat_history[-5:]],
-                {"role": "user", "content": user_input}
-            ],
-            max_tokens=150
+    # Check balance
+    if 'balance' in user_input or 'check balance' in user_input or 'my money' in user_input:
+        return (
+            f"💰 **Your Current Balance is: ₹{balance:,}**\n\n"
+            "You can always see this at the top of your dashboard."
         )
-        return response.choices[0].message['content'].strip()
-    except Exception as e:
-        return f"❌ AI Error: {str(e)}"
 
-# --- 🌙 DARK MODE CSS ---
-def inject_dark_mode_css():
-    dark_css = """
-    <style>
-        .stApp {
-            background-color: #111 !important;
-            color: #eee;
-        }
-        .css-1d391kg, .css-1v3fvcr, .css-1l02zno {
-            background-color: #111 !important;
-        }
-        .stTextInput > div > div > input,
-        .stTextInput > div > div > input:focus {
-            color: #fff !important;
-            background-color: #333 !important;
-            border: 1px solid #555 !important;
-        }
-        .stButton>button {
-            font-size: 18px !important;
-            padding: 12px 20px !important;
-            border-radius: 10px !important;
-        }
-        h1, h2, h3, h4, h5, h6, .stMarkdown, label {
-            color: #eee !important;
-        }
-        .stAlert {
-            background-color: #222 !important;
-            color: #ddd !important;
-            border: 1px solid #444 !important;
-        }
-    </style>
-    """
-    st.markdown(dark_css, unsafe_allow_html=True)
+    # Deposit help
+    elif 'deposit' in user_input or 'add money' in user_input or 'credit' in user_input:
+        return (
+            "💵 **To Deposit Money:**\n"
+            "1. Go to the **Deposit section** on the screen\n"
+            "2. Enter the amount you want to add\n"
+            "3. Click the **➕ Deposit** button\n\n"
+            "✅ The balance will update instantly!"
+        )
 
-# Apply dark mode if enabled
-if st.session_state.dark_mode:
-    inject_dark_mode_css()
+    # Withdraw help
+    elif 'withdraw' in user_input or 'withdraw money' in user_input or 'take out' in user_input or 'debit' in user_input:
+        return (
+            "💸 **To Withdraw Money:**\n"
+            "1. Go to the **Withdraw section**\n"
+            "2. Enter the amount you wish to withdraw\n"
+            "3. Click the **➖ Withdraw** button\n\n"
+            "⚠️ Make sure you have enough balance to avoid errors."
+        )
 
-# --- HEADER & THEME TOGGLE ---
-col_title, col_theme = st.columns([3, 1])
+    # Help / menu
+    elif 'help' in user_input or 'menu' in user_input or 'options' in user_input or 'what can you do' in user_input:
+        return (
+            "📌 **I can help you with:**\n\n"
+            "1️⃣ **Check Balance** → Ask: *'What is my balance?'*\n"
+            "2️⃣ **Deposit Money** → Ask: *'How do I deposit?'*\n"
+            "3️⃣ **Withdraw Money** → Ask: *'How to withdraw cash?'*\n\n"
+            "Just type any of these questions, and I’ll guide you step-by-step! 💬"
+        )
 
-with col_title:
-    st.title("🏦 MyBank Pro")
-    st.subheader("AI Banking on Mobile")
+    # Greeting
+    elif 'hello' in user_input or 'hi' in user_input or 'hey' in user_input:
+        return (
+            f"👋 Hello {name}! I'm your **MyBank Assistant**.\n\n"
+            "Need help?\n"
+            "Try asking:\n"
+            "- *What is my balance?*\n"
+            "- *How do I deposit money?*\n"
+            "- *How to withdraw?*"
+        )
 
-with col_theme:
-    st.write("")
-    if st.button("🌙 Dark Mode" if not st.session_state.dark_mode else "☀️ Light Mode"):
-        st.session_state.dark_mode = not st.session_state.dark_mode
-        st.rerun()
+    # Thank you
+    elif 'thank' in user_input:
+        return "😊 You're very welcome! Feel free to ask anything else."
 
-# --- Sidebar: AI Chat + Transactions ---
+    # Goodbye
+    elif 'bye' in user_input or 'exit' in user_input or 'leave' in user_input:
+        return "👋 Goodbye! Come back anytime for help with your banking."
+
+    # Fallback
+    else:
+        return (
+            "😅 I didn't quite get that.\n\n"
+            "Try asking about:\n"
+            "🔹 *Balance*\n"
+            "🔹 *Deposit*\n"
+            "🔹 *Withdraw*\n\n"
+            "Example: *'How to deposit?'*"
+        )
+
+# Title
+st.title("🏦 MyBank")
+st.subheader("Simple & Secure Banking Simulation")
+
+# --- Sidebar: Chatbot Assistant ---
 with st.sidebar:
-    st.markdown("### 💬 AI Assistant")
+    st.markdown("### 💬 MyBank Assistant")
+    st.markdown("Ask me anything about your account!")
 
+    # Auto-welcome message on first open
+    if len(st.session_state.chat_history) == 0:
+        st.session_state.chat_history.append({
+            "role": "assistant",
+            "text": (
+                "👋 Hi! I'm here to help you with:\n\n"
+                "1️⃣ Check Balance\n"
+                "2️⃣ Deposit Money\n"
+                "3️⃣ Withdraw Cash\n\n"
+                "Type a question above to get started!"
+            )
+        })
+
+    # Display chat history
     for message in st.session_state.chat_history:
-        role = "🧑 You" if message["role"] == "user" else "🤖 AI"
-        st.markdown(f"**{role}:** {message['text']}")
-        st.markdown("---")
+        if message["role"] == "user":
+            st.markdown(f"**🧑 You:** {message['text']}")
+        else:
+            st.markdown(f"**🤖 Bot:** {message['text']}")
 
-    user_question = st.text_input("Ask your banker:", key="ai_q")
+    # User input
+    user_question = st.text_input("Ask a question:", key="chat_input")
     if st.button("📤 Send"):
-        if user_question.strip():
+        if user_question.strip() != "":
+            # Add user message
             st.session_state.chat_history.append({"role": "user", "text": user_question})
-            with st.spinner("🧠 Thinking..."):
-                reply = get_ai_response(user_question)
-            st.session_state.chat_history.append({"role": "assistant", "text": reply})
+            # Get bot response
+            bot_reply = get_bot_response(user_question)
+            st.session_state.chat_history.append({"role": "assistant", "text": bot_reply})
             st.rerun()
         else:
-            st.warning("Type a question.")
+            st.warning("Please type a message.")
 
+    # Clear chat button
     if st.button("🧹 Clear Chat"):
         st.session_state.chat_history = []
         st.rerun()
 
     st.markdown("---")
+    st.markdown("<small>💡 Powered by smart banking logic</small>", unsafe_allow_html=True)
 
-    # Transaction History
-    st.markdown("### 📜 Recent Activity")
-    if st.session_state.transaction_history:
-        for tx in reversed(st.session_state.transaction_history[-6:]):
-            st.markdown(f"- 💹 {tx['type'].title()}: ₹{tx['amount']:,} | {tx['time']}")
-    else:
-        st.markdown("*No transactions yet.*")
-
-# ---- STEP 1: Account Setup ----
+# ---- STEP 1: Account Creation ----
 if not st.session_state.setup_complete:
     st.markdown("### 📝 Create Your Account")
-    name = st.text_input("Full Name:")
-    mobile = st.text_input("Mobile (10 digits):")
-    email = st.text_input("Email (for OTP):")
+    name = st.text_input("Enter your full name (letters and spaces only):")
+    mobile = st.text_input("Enter your 10-digit mobile number:")
 
-    if st.button("🚀 Create Account"):
-        name_clean = name.strip()
-        if not name_clean.isalpha() and not all(c.isalpha() or c.isspace() for c in name_clean):
-            st.error("❌ Name can only have letters and spaces.")
+    if st.button("Create Account"):
+        name_stripped = name.strip()
+        if not name_stripped:
+            st.error("❌ Name cannot be empty.")
+        elif not all(c.isalpha() or c.isspace() for c in name_stripped):
+            st.error("❌ Name can only contain letters and spaces (no numbers/symbols).")
         elif not mobile.isdigit() or len(mobile) != 10:
-            st.error("❌ Enter valid 10-digit mobile.")
-        elif "@" not in email:
-            st.error("❌ Enter valid email.")
+            st.error("❌ Please enter a valid 10-digit mobile number.")
         else:
-            st.session_state.name = name_clean.title()
+            st.session_state.name = name_stripped.title()
             st.session_state.mobile = mobile
-            st.session_state.email = email
             st.session_state.setup_complete = True
             st.session_state.balance = 0
-            st.success(f"✅ Account created, {st.session_state.name}!")
+            st.success(f"✅ Account created successfully, {st.session_state.name}!")
             st.rerun()
 
-# ---- STEP 2: Email OTP Verification ----
+# ---- STEP 2: Verification (PIN or OTP) ----
 elif not st.session_state.verified:
-    st.markdown(f"### 🔐 Verify: {st.session_state.email}")
+    st.markdown(f"### 🔐 Hello, {st.session_state.name}!")
+    st.write("Please verify your identity to access your account.")
 
-    if st.button("📨 Send OTP") or st.session_state.email_sent:
-        if not st.session_state.email_sent:
+    method = st.radio("Choose Verification Method:", ("🔐 PIN", "📨 OTP"))
+
+    if method == "🔐 PIN":
+        pin = st.text_input("Enter PIN", type="password", placeholder="Try 1234")
+        if st.button("Verify PIN"):
+            if pin == "1234":
+                st.session_state.verified = True
+                st.success("✅ PIN Verified! Welcome to your dashboard.")
+                st.rerun()
+            else:
+                st.error("❌ Incorrect PIN. Try again.")
+
+    elif method == "📨 OTP":
+        if st.button("Send OTP"):
             otp = generate_otp()
             st.session_state.otp = otp
-            if send_otp_email(st.session_state.email, otp):
-                st.session_state.email_sent = True
-                st.success("✅ OTP sent!")
-                st.info(f"💡 Simulated: `{otp}`")
-            else:
-                st.session_state.email_sent = False
-        else:
-            st.info("OTP already sent.")
+            st.info(f"💡 OTP sent! → Your OTP is: **`{otp}`**")
 
-    user_otp = st.text_input("Enter 6-digit OTP:")
-    if st.button("Verify OTP"):
-        if user_otp == st.session_state.otp and len(user_otp) == 6:
-            st.session_state.verified = True
-            st.session_state.email_sent = False
-            st.success("✅ Verified! Welcome.")
-            st.rerun()
-        else:
-            st.error("❌ Invalid OTP.")
+        user_otp = st.text_input("Enter the OTP you received:")
+        if st.button("Verify OTP"):
+            if user_otp == st.session_state.otp and user_otp.strip() != '':
+                st.session_state.verified = True
+                st.success("✅ OTP Verified! Welcome back.")
+                st.rerun()
+            else:
+                st.error("❌ Invalid or expired OTP.")
 
 # ---- STEP 3: Banking Dashboard ----
 else:
-    st.markdown(f"<h3 style='color:#4CAF50;'>✅ Hi, {st.session_state.name}!</h3>", unsafe_allow_html=True)
-    st.markdown(f"📱 {st.session_state.mobile} | ✉️ {st.session_state.email}")
+    st.markdown(f"<h3 style='color:#1f77b4;'>✅ Welcome, {st.session_state.name}!</h3>", unsafe_allow_html=True)
+    st.markdown(f"📱 **Mobile:** {st.session_state.mobile}")
     st.markdown("---")
 
-    st.markdown(f"<h4 style='color:#2196F3;'>💰 Balance: ₹{st.session_state.balance:,}</h4>", unsafe_allow_html=True)
+    # Display Balance
+    st.markdown(f"<h4>💰 Current Balance: ₹{st.session_state.balance:,}</h4>", unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2)
+    # Transaction Columns
+    col1, col2 = st.columns([1, 1])
 
     with col1:
-        st.markdown("### 💵 Deposit")
-        credit_amount = st.number_input("Amount", min_value=0, step=10, key="dep")
-        if st.button("➕ Deposit", use_container_width=True):
+        st.markdown("### 💵 Deposit (Credit)")
+        credit_amount = st.number_input("Amount to deposit", min_value=0, step=10, key="credit_in")
+        if st.button("➕ Deposit"):
             if credit_amount > 0:
                 st.session_state.balance += credit_amount
-                st.session_state.transaction_history.append({
-                    "type": "deposit",
-                    "amount": credit_amount,
-                    "time": datetime.now().strftime("%H:%M")
-                })
-                st.success(f"✅ ₹{credit_amount} added!")
-                time.sleep(1.2)
+                st.success(f"✅ ₹{credit_amount} credited successfully!")
+                time.sleep(1.5)
                 st.rerun()
             else:
-                st.warning("⚠️ Enter amount.")
+                st.warning("⚠️ Enter a valid amount.")
 
     with col2:
-        st.markdown("### 💸 Withdraw")
-        debit_amount = st.number_input("Amount", min_value=0, step=10, key="wd")
-        if st.button("➖ Withdraw", use_container_width=True):
+        st.markdown("### 💸 Withdraw (Debit)")
+        debit_amount = st.number_input("Amount to withdraw", min_value=0, step=10, key="debit_in")
+        if st.button("➖ Withdraw"):
             if debit_amount > 0:
                 if debit_amount <= st.session_state.balance:
                     st.session_state.balance -= debit_amount
-                    st.session_state.transaction_history.append({
-                        "type": "withdrawal",
-                        "amount": debit_amount,
-                        "time": datetime.now().strftime("%H:%M")
-                    })
-                    st.success(f"✅ ₹{debit_amount} withdrawn!")
-                    time.sleep(1.2)
+                    st.success(f"✅ ₹{debit_amount} debited successfully!")
+                    time.sleep(1.5)
                     st.rerun()
                 else:
-                    st.error("❌ Low balance!")
+                    st.error("❌ Insufficient balance!")
             else:
-                st.warning("⚠️ Enter amount.")
+                st.warning("⚠️ Enter a valid amount.")
 
     st.markdown("---")
 
-    if st.button("🔚 Logout", use_container_width=True):
+    # Logout Button
+    if st.button("🔚 Logout"):
         for key in initial_state:
             st.session_state[key] = initial_state[key]
-        st.success("👋 See you soon!")
+        st.success("👋 Logged out successfully. Redirecting...")
         st.rerun()
 
-    st.markdown("<center><small>📱 This app works perfectly on mobile!</small></center>", unsafe_allow_html=True)
+    # Footer hint
+    st.markdown("<center><small>💡 Need help? Use the <b>chatbot</b> in the sidebar!</small></center>", unsafe_allow_html=True)
